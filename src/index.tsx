@@ -65,9 +65,13 @@ export function createProgram(): Command {
             memory: env.memoryModel,
           },
         });
-        const result = await generateWriteUnit(topic, { llmClient });
 
-        render(<App topic={topic} result={result} />);
+        render(
+          <App
+            topic={topic}
+            generateCandidate={(nextTopic) => generateWriteUnit(nextTopic, { llmClient })}
+          />,
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
 

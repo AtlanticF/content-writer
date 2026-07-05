@@ -1,7 +1,7 @@
 ---
 plan: intake
 seq: 0001
-stage: intake
+stage: implement
 owner: main
 ---
 # Intake — greenfield bootstrap
@@ -93,3 +93,4 @@ agent can learn durable preference rules from refinements.
 - 2026-07-03: Approved architecture uses a handwritten TypeScript agent core,
   Ink-style CLI UI, app-controlled side effects, local JSON preference memory,
   and separate writing/memory model routing.
+- 2026-07-05: Advanced to implement for the Ink copilot writing workspace slice.
