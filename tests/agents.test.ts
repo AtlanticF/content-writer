@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AgentLoop, type AgentModel, type AgentTool } from '../src/agents.js';
+import type { ModelMessage } from '../src/types.js';
 
 const createEchoModel = (): AgentModel => ({
   async generate({ messages }) {
@@ -13,19 +14,20 @@ const createEchoModel = (): AgentModel => ({
 });
 
 describe('AgentLoop', () => {
-  it('accepts user input and derives that the model should act next', () => {
+  it('stores only model messages and derives that the model should act next', () => {
     const agent = new AgentLoop({ model: createEchoModel() });
 
     agent.userInput('Write about focus.');
 
-    expect(agent.getMessages()).toEqual([{ role: 'user', content: 'Write about focus.' }]);
+    const messages: ModelMessage[] = agent.getMessages();
+    expect(messages).toEqual([{ role: 'user', content: 'Write about focus.' }]);
     expect(agent._next()).toMatchObject({
       actor: 'model',
       unprocessedToolCalls: [],
     });
   });
 
-  it('runs one model step without using an SDK agent loop', async () => {
+  it('runs one model step with the custom loop', async () => {
     const agent = new AgentLoop({ model: createEchoModel() });
 
     agent.userInput('Topic');
@@ -38,17 +40,17 @@ describe('AgentLoop', () => {
     ]);
   });
 
-  it('detects unprocessed tool calls from assistant messages', () => {
+  it('detects waiting tool calls from assistant model messages', () => {
     const agent = new AgentLoop({ model: createEchoModel() });
 
     agent.addMessages([
       {
         role: 'assistant',
-        content: '',
-        toolCalls: [
+        content: [
           {
-            id: 'call-1',
-            name: 'thinking',
+            type: 'tool-call',
+            toolCallId: 'call-1',
+            toolName: 'thinking',
             input: { thought: 'Choose a concrete next sentence.' },
           },
         ],
@@ -63,10 +65,10 @@ describe('AgentLoop', () => {
       },
     ]);
     expect(agent.getUnprocessedTollCalls()).toEqual(agent.getUnprocessedToolCalls());
-    expect(agent._next().actor).toBe('tool');
+    expect(agent._next().actor).toBe('model');
   });
 
-  it('executes a tool call and records its result as a tool message', async () => {
+  it('executes a waiting tool call and records the finished result as a model message', async () => {
     const tools: Record<string, AgentTool> = {
       thinking: {
         async execute(input) {
@@ -79,7 +81,14 @@ describe('AgentLoop', () => {
     agent.addMessages([
       {
         role: 'assistant',
-        toolCalls: [{ id: 'call-1', name: 'thinking', input: { thought: 'Plan next.' } }],
+        content: [
+          {
+            type: 'tool-call',
+            toolCallId: 'call-1',
+            toolName: 'thinking',
+            input: { thought: 'Plan next.' },
+          },
+        ],
       },
     ]);
 
@@ -87,12 +96,20 @@ describe('AgentLoop', () => {
 
     expect(agent.getMessages().at(-1)).toEqual({
       role: 'tool',
-      toolCallId: 'call-1',
-      toolName: 'thinking',
-      content: '{"thought":"Plan next."}',
-      result: { thought: 'Plan next.' },
+      content: [
+        {
+          type: 'tool-result',
+          toolCallId: 'call-1',
+          toolName: 'thinking',
+          output: {
+            type: 'json',
+            value: { thought: 'Plan next.' },
+          },
+        },
+      ],
     });
     expect(agent.getUnprocessedToolCalls()).toEqual([]);
+    expect(agent._next().actor).toBe('model');
   });
 
   it('supports the legacy misspelled excuteTool alias', async () => {
@@ -109,10 +126,19 @@ describe('AgentLoop', () => {
 
     await agent.excuteTool({ id: 'call-1', name: 'thinking', input: {} });
 
-    expect(agent.getMessages().at(-1)).toMatchObject({
+    expect(agent.getMessages().at(-1)).toEqual({
       role: 'tool',
-      toolCallId: 'call-1',
-      toolName: 'thinking',
+      content: [
+        {
+          type: 'tool-result',
+          toolCallId: 'call-1',
+          toolName: 'thinking',
+          output: {
+            type: 'json',
+            value: { ok: true },
+          },
+        },
+      ],
     });
   });
 });

@@ -2,7 +2,7 @@ import { createMemoryContext } from './context.js';
 import type { JSONValue } from 'ai';
 import type { ModelMessage } from './types.js';
 
-export type AgentActor = 'user' | 'model' | 'tool';
+export type AgentActor = 'user' | 'model';
 
 export type AgentToolCall = {
   id: string;
@@ -10,40 +10,38 @@ export type AgentToolCall = {
   input: Record<string, unknown>;
 };
 
-export type AgentMessage =
-  | {
-      role: 'user';
-      content: string;
-    }
-  | {
-      role: 'assistant';
-      content?: string;
-      toolCalls?: AgentToolCall[];
-    }
-  | {
-      role: 'tool';
-      toolCallId: string;
-      toolName: string;
-      content: string;
-      result: unknown;
-    };
-
 export type AgentState = {
-  messages: AgentMessage[];
+  messages: ModelMessage[];
   modelMessages: ModelMessage[];
   actor: AgentActor;
   unprocessedToolCalls: AgentToolCall[];
 };
 
 export type AgentModel = {
-  generate(input: {
-    messages: ModelMessage[];
-  }): Promise<Extract<AgentMessage, { role: 'assistant' }>>;
+  generate(input: { messages: ModelMessage[] }): Promise<ModelMessage>;
 };
 
 export type AgentTool = {
   execute(input: Record<string, unknown>): Promise<unknown> | unknown;
 };
+
+type AgentContentPart =
+  | {
+      type: 'tool-call';
+      toolCallId: string;
+      toolName: string;
+      input: unknown;
+    }
+  | {
+      type: 'tool-result';
+      toolCallId: string;
+      toolName: string;
+      output: unknown;
+    }
+  | {
+      type?: string;
+      [key: string]: unknown;
+    };
 
 export type AgentLoopOptions = {
   model: AgentModel;
@@ -51,9 +49,7 @@ export type AgentLoopOptions = {
 };
 
 export class AgentLoop {
-  readonly #context = createMemoryContext<AgentMessage, ModelMessage>({
-    toModelMessage: toModelMessage,
-  });
+  readonly #context = createMemoryContext<ModelMessage>();
   readonly #model: AgentModel;
   readonly #tools: Record<string, AgentTool>;
 
@@ -62,7 +58,7 @@ export class AgentLoop {
     this.#tools = tools;
   }
 
-  addMessages(messages: AgentMessage[]): void {
+  addMessages(messages: ModelMessage[]): void {
     this.#context.addMessages(messages);
   }
 
@@ -72,7 +68,7 @@ export class AgentLoop {
     return this._next();
   }
 
-  getMessages(): AgentMessage[] {
+  getMessages(): ModelMessage[] {
     return this.#context.getMessages();
   }
 
@@ -94,7 +90,7 @@ export class AgentLoop {
 
     return {
       messages,
-      modelMessages: this.toModelMessages(),
+      modelMessages: messages,
       actor: deriveActor(messages, unprocessedToolCalls),
       unprocessedToolCalls,
     };
@@ -103,7 +99,7 @@ export class AgentLoop {
   async next(): Promise<AgentState> {
     const state = this._next();
 
-    if (state.actor === 'tool') {
+    if (state.unprocessedToolCalls.length > 0) {
       for (const toolCall of state.unprocessedToolCalls) {
         await this.executeTool(toolCall);
       }
@@ -131,15 +127,7 @@ export class AgentLoop {
     }
 
     const result = await selectedTool.execute(toolCall.input);
-    this.addMessages([
-      {
-        role: 'tool',
-        toolCallId: toolCall.id,
-        toolName: toolCall.name,
-        content: stringifyToolResult(result),
-        result,
-      },
-    ]);
+    this.addMessages([createToolResultMessage(toolCall, result)]);
 
     return this._next();
   }
@@ -150,27 +138,33 @@ export class AgentLoop {
 }
 
 export function deriveActor(
-  messages: AgentMessage[],
+  messages: ModelMessage[],
   unprocessedToolCalls = deriveUnprocessedToolCalls(messages),
 ): AgentActor {
-  if (unprocessedToolCalls.length > 0) {
-    return 'tool';
-  }
-
   const lastMessage = messages.at(-1);
 
-  if (!lastMessage || lastMessage.role === 'assistant') {
+  if (!lastMessage) {
     return 'user';
   }
 
-  return 'model';
+  if (lastMessage.role === 'user' || lastMessage.role === 'tool' || unprocessedToolCalls.length > 0) {
+    return 'model';
+  }
+
+  return 'user';
 }
 
-export function deriveUnprocessedToolCalls(messages: AgentMessage[]): AgentToolCall[] {
-  const processedToolCallIds = new Set(
-    messages
-      .filter((message): message is Extract<AgentMessage, { role: 'tool' }> => message.role === 'tool')
-      .map((message) => message.toolCallId),
+export function deriveUnprocessedToolCalls(messages: ModelMessage[]): AgentToolCall[] {
+  const finishedToolCallIds = new Set(
+    messages.flatMap((message) => {
+      if (message.role !== 'tool') {
+        return [];
+      }
+
+      return getContentParts(message.content)
+        .filter(isToolResultPart)
+        .map((part) => part.toolCallId);
+    }),
   );
 
   return messages.flatMap((message) => {
@@ -178,60 +172,54 @@ export function deriveUnprocessedToolCalls(messages: AgentMessage[]): AgentToolC
       return [];
     }
 
-    return (message.toolCalls ?? []).filter((toolCall) => !processedToolCallIds.has(toolCall.id));
+    return getContentParts(message.content)
+      .filter(isToolCallPart)
+      .filter((part) => !finishedToolCallIds.has(part.toolCallId))
+      .map((part) => ({
+        id: part.toolCallId,
+        name: part.toolName,
+        input: toRecordInput(part.input),
+      }));
   });
 }
 
-function toModelMessage(message: AgentMessage): ModelMessage {
-  if (message.role === 'tool') {
-    return {
-      role: 'tool',
-      content: [
-        {
-          type: 'tool-result',
-          toolCallId: message.toolCallId,
-          toolName: message.toolName,
-          output: {
-            type: 'json',
-            value: message.result as JSONValue,
-          },
-        },
-      ],
-    };
-  }
-
-  if (message.role === 'assistant' && message.toolCalls?.length) {
-    return {
-      role: 'assistant',
-      content: [
-        ...(message.content
-          ? [
-              {
-                type: 'text' as const,
-                text: message.content,
-              },
-            ]
-          : []),
-        ...message.toolCalls.map((toolCall) => ({
-          type: 'tool-call' as const,
-          toolCallId: toolCall.id,
-          toolName: toolCall.name,
-          input: toolCall.input,
-        })),
-      ],
-    };
-  }
-
+function createToolResultMessage(toolCall: AgentToolCall, result: unknown): ModelMessage {
   return {
-    role: message.role,
-    content: message.content ?? '',
+    role: 'tool',
+    content: [
+      {
+        type: 'tool-result',
+        toolCallId: toolCall.id,
+        toolName: toolCall.name,
+        output: {
+          type: 'json',
+          value: result as JSONValue,
+        },
+      },
+    ],
   };
 }
 
-function stringifyToolResult(result: unknown): string {
-  if (typeof result === 'string') {
-    return result;
+function getContentParts(content: ModelMessage['content']): AgentContentPart[] {
+  if (typeof content === 'string') {
+    return [];
   }
 
-  return JSON.stringify(result);
+  return content as AgentContentPart[];
+}
+
+function isToolCallPart(part: AgentContentPart): part is Extract<AgentContentPart, { type: 'tool-call' }> {
+  return part.type === 'tool-call';
+}
+
+function isToolResultPart(part: AgentContentPart): part is Extract<AgentContentPart, { type: 'tool-result' }> {
+  return part.type === 'tool-result';
+}
+
+function toRecordInput(input: unknown): Record<string, unknown> {
+  if (input && typeof input === 'object' && !Array.isArray(input)) {
+    return input as Record<string, unknown>;
+  }
+
+  return {};
 }
