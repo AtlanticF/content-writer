@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryContext } from '../src/context.js';
+import type { ModelMessage } from '../src/types.js';
 
 type AppMessage = {
   role: 'user' | 'assistant';
   content: string;
   uiStatus?: 'pending' | 'done';
-};
-
-type ModelMessage = {
-  role: 'user' | 'assistant';
-  content: string;
 };
 
 describe('createMemoryContext', () => {

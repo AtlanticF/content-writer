@@ -2,6 +2,13 @@ export type WorkflowSystemPromptInput = {
   memory: string;
 };
 
+export type ModelMessageRole = 'system' | 'user' | 'assistant' | 'tool';
+
+export type ModelMessage = {
+  role: ModelMessageRole;
+  content: string;
+};
+
 export type CopilotRequest = {
   tool: string;
   intention_string: string;
