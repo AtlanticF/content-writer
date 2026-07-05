@@ -1,4 +1,4 @@
-import type { WorkflowSystemPromptInput } from './types.js';
+import type { WorkflowSystemPromptInput } from '../types.js';
 
 export function createWorkflowSystemPrompt({ memory }: WorkflowSystemPromptInput): string {
   return `

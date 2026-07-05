@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMemorySystemPrompt } from '../../src/prompts/system.memory.js';
 import { createWorkflowSystemPrompt } from '../../src/prompts/system.workflow.js';
-import type { CopilotRequest, CopilotResponse } from '../../src/prompts/types.js';
+import type { CopilotRequest, CopilotResponse } from '../../src/types.js';
 
 describe('createWorkflowSystemPrompt', () => {
   it('includes user performance memory and write-unit workflow guidance', () => {

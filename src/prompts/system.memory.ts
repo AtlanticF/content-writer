@@ -1,4 +1,4 @@
-import type { MemorySystemPromptInput } from './types.js';
+import type { MemorySystemPromptInput } from '../types.js';
 
 export function createMemorySystemPrompt({
   req,
