@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
+import { openVimEditor } from './editor.js';
 
-type CopilotStatus = 'idle' | 'generating' | 'review' | 'approved' | 'rejected' | 'error';
+type CopilotStatus = 'idle' | 'generating' | 'review' | 'approved' | 'rejected' | 'editing' | 'error';
 
 type CopilotViewModelInput = {
   topic: string;
@@ -9,8 +10,7 @@ type CopilotViewModelInput = {
   candidate?: string;
   paragraphIndex: number;
   status: CopilotStatus;
-  refineMode: boolean;
-  draft: string;
+  editing: boolean;
   error?: string;
 };
 
@@ -29,6 +29,7 @@ type AppProps = {
   result?: string;
   error?: string;
   generateCandidate?: (topic: string) => Promise<string>;
+  editCandidate?: (candidate: string) => Promise<string>;
 };
 
 export function createCopilotViewModel({
@@ -37,15 +38,16 @@ export function createCopilotViewModel({
   candidate,
   paragraphIndex,
   status,
-  refineMode,
-  draft,
+  editing,
   error,
 }: CopilotViewModelInput): CopilotViewModel {
   const leftBody = approvedSentences.length > 0 ? approvedSentences.join(' ') : 'No approved sentence yet.';
-  const activeCandidate = refineMode ? draft : candidate;
-  const statusLine = status === 'generating' ? 'Generating next write unit...' : `Paragraph ${paragraphIndex}`;
+  const statusLine =
+    status === 'generating'
+      ? 'Generating next write unit...'
+      : `Paragraph ${paragraphIndex}${editing ? '\nVim editor is open. Save and quit to return.' : ''}`;
   const errorLine = error ? `\n${error}` : '';
-  const candidateLine = activeCandidate ? `\n${activeCandidate}` : '';
+  const candidateLine = candidate ? `\n${candidate}` : '';
 
   return {
     title: 'Content Writer',
@@ -54,18 +56,23 @@ export function createCopilotViewModel({
     leftBody,
     rightTitle: 'Agent Copilot',
     rightBody: `${statusLine}${candidateLine}${errorLine}`,
-    controls: refineMode ? 'enter save | esc cancel | type to edit' : 'a approve | r reject | e refine | q quit',
+    controls: editing ? 'save and quit Vim to accept refine' : 'a approve | r reject | e vim refine | q quit',
   };
 }
 
-export function App({ topic, result, error, generateCandidate }: AppProps) {
+export function App({
+  topic,
+  result,
+  error,
+  generateCandidate,
+  editCandidate = openVimEditor,
+}: AppProps) {
   const { exit } = useApp();
   const [approvedSentences, setApprovedSentences] = useState<string[]>([]);
   const [candidate, setCandidate] = useState(result);
   const [status, setStatus] = useState<CopilotStatus>(result ? 'review' : 'idle');
   const [currentError, setCurrentError] = useState(error);
-  const [refineMode, setRefineMode] = useState(false);
-  const [draft, setDraft] = useState(result ?? '');
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +91,6 @@ export function App({ topic, result, error, generateCandidate }: AppProps) {
         }
 
         setCandidate(nextCandidate);
-        setDraft(nextCandidate);
         setStatus('review');
       })
       .catch((caught) => {
@@ -101,31 +107,8 @@ export function App({ topic, result, error, generateCandidate }: AppProps) {
     };
   }, [candidate, currentError, generateCandidate, topic]);
 
-  useInput((input, key) => {
-    if (refineMode) {
-      if (key.escape) {
-        setDraft(candidate ?? '');
-        setRefineMode(false);
-        return;
-      }
-
-      if (key.return) {
-        setCandidate(draft);
-        setApprovedSentences((sentences) => [...sentences, draft]);
-        setRefineMode(false);
-        setStatus('approved');
-        return;
-      }
-
-      if (key.backspace || key.delete) {
-        setDraft((current) => current.slice(0, -1));
-        return;
-      }
-
-      if (input) {
-        setDraft((current) => `${current}${input}`);
-      }
-
+  useInput((input) => {
+    if (editing) {
       return;
     }
 
@@ -146,8 +129,22 @@ export function App({ topic, result, error, generateCandidate }: AppProps) {
     }
 
     if (input === 'e' && candidate) {
-      setDraft(candidate);
-      setRefineMode(true);
+      setEditing(true);
+      setStatus('editing');
+
+      editCandidate(candidate)
+        .then((editedCandidate) => {
+          setCandidate(editedCandidate);
+          setApprovedSentences((sentences) => [...sentences, editedCandidate]);
+          setStatus('approved');
+        })
+        .catch((caught) => {
+          setCurrentError(caught instanceof Error ? caught.message : String(caught));
+          setStatus('error');
+        })
+        .finally(() => {
+          setEditing(false);
+        });
     }
   });
 
@@ -157,8 +154,7 @@ export function App({ topic, result, error, generateCandidate }: AppProps) {
     candidate,
     paragraphIndex: approvedSentences.length + 1,
     status,
-    refineMode,
-    draft,
+    editing,
     error: currentError,
   });
 

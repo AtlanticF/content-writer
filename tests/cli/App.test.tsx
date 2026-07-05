@@ -9,8 +9,7 @@ describe('createCopilotViewModel', () => {
       candidate: '后来我发现，它只是让我停下来。',
       paragraphIndex: 1,
       status: 'review',
-      refineMode: false,
-      draft: '',
+      editing: false,
       error: undefined,
     });
 
@@ -21,24 +20,23 @@ describe('createCopilotViewModel', () => {
     expect(view.rightBody).toContain('后来我发现，它只是让我停下来。');
     expect(view.controls).toContain('a approve');
     expect(view.controls).toContain('r reject');
-    expect(view.controls).toContain('e refine');
+    expect(view.controls).toContain('e vim refine');
   });
 
-  it('shows refine draft as the active editable candidate', () => {
+  it('shows when Vim editor mode is active', () => {
     const view = createCopilotViewModel({
       topic: 'A topic',
       approvedSentences: [],
       candidate: 'Original sentence.',
       paragraphIndex: 2,
-      status: 'review',
-      refineMode: true,
-      draft: 'Refined sentence.',
+      status: 'editing',
+      editing: true,
       error: undefined,
     });
 
     expect(view.rightBody).toContain('Paragraph 2');
-    expect(view.rightBody).toContain('Refined sentence.');
-    expect(view.controls).toContain('enter save');
-    expect(view.controls).toContain('esc cancel');
+    expect(view.rightBody).toContain('Original sentence.');
+    expect(view.rightBody).toContain('Vim editor is open');
+    expect(view.controls).toContain('save and quit Vim');
   });
 });
