@@ -1,12 +1,7 @@
+export type { ModelMessage } from 'ai';
+
 export type WorkflowSystemPromptInput = {
   memory: string;
-};
-
-export type ModelMessageRole = 'system' | 'user' | 'assistant' | 'tool';
-
-export type ModelMessage = {
-  role: ModelMessageRole;
-  content: string;
 };
 
 export type CopilotRequest = {
