@@ -15,9 +15,11 @@ describe('createWorkflowSystemPrompt', () => {
     expect(prompt).toContain('Role');
     expect(prompt).toContain('write unit');
     expect(prompt).toContain('Approve, reject, or refine');
-    expect(prompt).toContain('Use ls tools to discover available files and folders');
-    expect(prompt).toContain('Use read tools to load a specific file');
-    expect(prompt).toContain('Use grep/search tools to find relevant notes');
+    expect(prompt).toContain('Use ls-tool to discover available files and folders');
+    expect(prompt).toContain('Use read-tool to load a specific file');
+    expect(prompt).toContain('Use thinking-tool to choose the next sentence intention');
+    expect(prompt).toContain('Use writing-tool to generate exactly one candidate write unit');
+    expect(prompt).not.toContain('grep/search');
     expect(prompt).not.toContain('Use translate tools');
     expect(prompt).toContain('You MUST answer concisely with fewer than 4 lines');
     expect(prompt).toContain('Proactiveness');
