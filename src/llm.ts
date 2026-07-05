@@ -1,10 +1,13 @@
-import { createOpenAI, type OpenAIProvider } from '@ai-sdk/openai';
+import {
+  createOpenAICompatible,
+  type OpenAICompatibleProvider,
+} from '@ai-sdk/openai-compatible';
 import { generateText as aiGenerateText } from 'ai';
 
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
 export const DEFAULT_LLM_MODELS = {
-  writing: 'openrouter/auto',
+  writing: 'z-ai/glm-4.5',
   memory: 'openai/gpt-4o-mini',
 } as const;
 
@@ -26,7 +29,7 @@ export type LlmConfig = {
   headers?: Record<string, string>;
 };
 
-export type LlmModel = ReturnType<OpenAIProvider['chat']>;
+export type LlmModel = ReturnType<OpenAICompatibleProvider['chatModel']>;
 
 export type LlmModels = Record<LlmRole, LlmModel>;
 
@@ -66,10 +69,10 @@ export function resolveLlmConfig(input: LlmConfigInput = {}): LlmConfig {
   };
 }
 
-export function createOpenRouterProvider(input: LlmConfigInput = {}): OpenAIProvider {
+export function createOpenRouterProvider(input: LlmConfigInput = {}): OpenAICompatibleProvider {
   const config = resolveLlmConfig(input);
 
-  return createOpenAI({
+  return createOpenAICompatible({
     name: 'openrouter',
     apiKey: config.apiKey,
     baseURL: config.baseURL,
@@ -82,8 +85,8 @@ export function createLlmModels(input: LlmConfigInput = {}): LlmModels {
   const provider = createOpenRouterProvider(config);
 
   return {
-    writing: provider.chat(config.models.writing),
-    memory: provider.chat(config.models.memory),
+    writing: provider.chatModel(config.models.writing),
+    memory: provider.chatModel(config.models.memory),
   };
 }
 

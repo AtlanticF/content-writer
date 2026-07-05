@@ -14,6 +14,7 @@ describe('resolveLlmConfig', () => {
 
     expect(config.baseURL).toBe(OPENROUTER_BASE_URL);
     expect(config.models).toEqual(DEFAULT_LLM_MODELS);
+    expect(config.models.writing).toBe('z-ai/glm-4.5');
   });
 
   it('allows callers to override writing and memory models independently', () => {
@@ -33,7 +34,7 @@ describe('resolveLlmConfig', () => {
 describe('createOpenRouterProvider', () => {
   it('creates an OpenAI-compatible provider named openrouter', () => {
     const provider = createOpenRouterProvider({ apiKey: 'test-key' });
-    const model = provider.chat('openai/gpt-4o-mini');
+    const model = provider.chatModel('openai/gpt-4o-mini');
 
     expect(model.provider).toBe('openrouter.chat');
     expect(model.modelId).toBe('openai/gpt-4o-mini');
