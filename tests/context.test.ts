@@ -16,12 +16,13 @@ describe('createMemoryContext', () => {
       { role: 'user', content: 'Write about focus.' },
       { role: 'assistant', content: 'Focus starts with refusal.' },
     ]);
+    const modelMessages: ModelMessage[] = context.toModelMessages();
 
     expect(context.getMessages()).toEqual([
       { role: 'user', content: 'Write about focus.' },
       { role: 'assistant', content: 'Focus starts with refusal.' },
     ]);
-    expect(context.toModelMessages()).toEqual(context.getMessages());
+    expect(modelMessages).toEqual(context.getMessages());
   });
 
   it('returns array copies so callers cannot mutate stored context by pushing', () => {

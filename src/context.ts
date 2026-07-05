@@ -1,14 +1,16 @@
-export type MemoryContextOptions<TMessage, TModelMessage = TMessage> = {
+import type { ModelMessage } from './types.js';
+
+export type MemoryContextOptions<TMessage, TModelMessage = ModelMessage> = {
   toModelMessage?: (message: TMessage) => TModelMessage;
 };
 
-export type MemoryContext<TMessage, TModelMessage = TMessage> = {
+export type MemoryContext<TMessage, TModelMessage = ModelMessage> = {
   addMessages(messages: TMessage[]): void;
   getMessages(): TMessage[];
   toModelMessages(): TModelMessage[];
 };
 
-export function createMemoryContext<TMessage, TModelMessage = TMessage>({
+export function createMemoryContext<TMessage, TModelMessage = ModelMessage>({
   toModelMessage,
 }: MemoryContextOptions<TMessage, TModelMessage> = {}): MemoryContext<
   TMessage,
